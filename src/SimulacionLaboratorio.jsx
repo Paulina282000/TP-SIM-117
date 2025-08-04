@@ -7,490 +7,528 @@ const SimulacionLaboratorio = () => {
   const [desde, setDesde] = useState(0);
   const [hasta, setHasta] = useState(100);
   const [cantidadSimulaciones, setCantidadSimulaciones] = useState(300);
+  const [cargando, setCargando] = useState(false);
 
   const simular = () => {
-    try {
-      console.log("Iniciando simulación...");
-      
-      // Validaciones
-      if (cantidadSimulaciones <= 0) {
-        alert("La cantidad de simulaciones debe ser mayor a 0");
+    setCargando(true);
+    setTimeout(() => {
+      try {
+        console.log("Iniciando simulación...");
+        
+        // Validaciones
+        if (cantidadSimulaciones <= 0) {
+          alert("La cantidad de simulaciones debe ser mayor a 0");
+          setCargando(false);
+          return;
+        }
+      if (desde < 0 || hasta < 0) {
+        alert("Los valores 'desde' y 'hasta' deben ser mayores o iguales a 0");
+        setCargando(false);
         return;
       }
-    if (desde < 0 || hasta < 0) {
-      alert("Los valores 'desde' y 'hasta' deben ser mayores o iguales a 0");
-      return;
-    }
-    if (desde >= cantidadSimulaciones) {
-      alert("El valor 'desde' debe ser menor que la cantidad de simulaciones");
-      return;
-    }
-    if (hasta <= desde) {
-      alert("El valor 'hasta' debe ser mayor que 'desde'");
-      return;
-    }
-    if (hasta > cantidadSimulaciones) {
-      alert("El valor 'hasta' no puede ser mayor que la cantidad de simulaciones");
-      return;
-    }
+      if (desde >= cantidadSimulaciones) {
+        alert("El valor 'desde' debe ser menor que la cantidad de simulaciones");
+        setCargando(false);
+        return;
+      }
+      if (hasta <= desde) {
+        alert("El valor 'hasta' debe ser mayor que 'desde'");
+        setCargando(false);
+        return;
+      }
+      if (hasta > cantidadSimulaciones) {
+        alert("El valor 'hasta' no puede ser mayor que la cantidad de simulaciones");
+        setCargando(false);
+        return;
+      }
 
-    const filasSimulacion = [];
-    const equiposSimulados = [];
-    let reloj = 0;
-    const rndInicial = Math.random();
-    const tiempoInicial = generarTiempoEntreLlegadas();
-    let proximaLlegada = tiempoInicial;
-    
-    // Para verificar que los RNDs sean únicos
-    const rndsGenerados = new Set();
-    rndsGenerados.add(rndInicial);
-    
-    console.log("Parámetros:", { cantidadSimulaciones, desde, hasta, proximaLlegada });
-    console.log("RND inicial:", rndInicial.toFixed(4), "Tiempo inicial:", tiempoInicial.toFixed(2));
-
-    // Estado inicial
-    let fila = new VectorEstadoLaboratorio();
-    fila.evento = "inicialización";
-    fila.reloj = reloj;
-    fila.rndLlegada = rndInicial;
-    fila.tiempoEntreLlegadas = tiempoInicial;
-    fila.proximaLlegada = proximaLlegada;
-    fila.tecnico1 = { estado: "libre", equipo: null };
-    fila.tecnico2 = { estado: "libre", equipo: null };
-    fila.colaEspera = [];
-    fila.equiposRechazados = 0;
-    fila.equiposAtendidos = 0;
-    fila.tiempoTotalPermanencia = 0;
-    fila.usoTecnico1 = 0;
-    fila.usoTecnico2 = 0;
-    fila.tiempoInicioOcupacionTec1 = -1;
-    fila.tiempoInicioOcupacionTec2 = -1;
-    
-    // Asegurar que la cola esté inicializada
-    if (!fila.colaEspera) {
-      fila.colaEspera = [];
-    }
-
-    filasSimulacion.push(fila.toRow());
-
-    let iteraciones = 0;
-    const maxIteraciones = cantidadSimulaciones * 20; // Límite de seguridad más alto
-    
-    while (equiposSimulados.length < cantidadSimulaciones && iteraciones < maxIteraciones) {
-      iteraciones++;
+      // OPTIMIZACIÓN: Vectores reutilizables en memoria
+      const filasSimulacion = [];
+      const equiposSimulados = [];
+      let reloj = 0;
+      const rndInicial = Math.random();
+      const tiempoInicial = generarTiempoEntreLlegadas();
+      let proximaLlegada = tiempoInicial;
       
-      if (iteraciones % 50 === 0) {
-        console.log(`Iteración ${iteraciones}, equipos simulados: ${equiposSimulados.length}, reloj: ${reloj.toFixed(2)}`);
-      }
+      // Para verificar que los RNDs sean únicos
+      const rndsGenerados = new Set();
+      rndsGenerados.add(rndInicial);
       
-      const anterior = fila;
-      fila = new VectorEstadoLaboratorio();
-      fila.copiarDesde(anterior);
+      console.log("Parámetros:", { cantidadSimulaciones, desde, hasta, proximaLlegada });
+      console.log("RND inicial:", rndInicial.toFixed(4), "Tiempo inicial:", tiempoInicial.toFixed(2));
 
-      // Determinar próximo evento
-      const eventos = [
-        anterior.proximaLlegada,
-        anterior.finTrabajo1,
-        anterior.finTrabajo2,
-        anterior.retornoTrabajo1,
-        anterior.retornoTrabajo2
-      ].filter(e => e >= 0);
-
-      if (eventos.length === 0) {
-        console.log("No hay eventos activos, terminando simulación");
-        break;
+      // OPTIMIZACIÓN: Vectores reutilizables
+      let vectorActual = new VectorEstadoLaboratorio();
+      let vectorAnterior = new VectorEstadoLaboratorio();
+      
+      // Estado inicial
+      vectorActual.evento = "inicialización";
+      vectorActual.reloj = reloj;
+      vectorActual.rndLlegada = rndInicial;
+      vectorActual.tiempoEntreLlegadas = tiempoInicial;
+      vectorActual.proximaLlegada = proximaLlegada;
+      vectorActual.tecnico1 = { estado: "libre", equipo: null };
+      vectorActual.tecnico2 = { estado: "libre", equipo: null };
+      vectorActual.colaEspera = [];
+      vectorActual.equiposRechazados = 0;
+      vectorActual.equiposAtendidos = 0;
+      vectorActual.tiempoTotalPermanencia = 0;
+      vectorActual.usoTecnico1 = 0;
+      vectorActual.usoTecnico2 = 0;
+      vectorActual.tiempoInicioOcupacionTec1 = -1;
+      vectorActual.tiempoInicioOcupacionTec2 = -1;
+      
+      // Asegurar que la cola esté inicializada
+      if (!vectorActual.colaEspera) {
+        vectorActual.colaEspera = [];
       }
 
-      const proximo = Math.min(...eventos);
-      reloj = proximo;
-      fila.reloj = reloj;
-
-      console.log(`Evento: ${proximo}, Reloj: ${reloj.toFixed(2)}, Equipos: ${equiposSimulados.length}`);
-
-      // Procesar evento
-      if (proximo === anterior.proximaLlegada) {
-        fila.evento = `llegada_equipo_${equiposSimulados.length + 1}`;
-        // Llegada de equipo
-        const rndLlegada = Math.random();
-        const tiempoEntreLlegadas = generarTiempoEntreLlegadas();
-        proximaLlegada = reloj + tiempoEntreLlegadas;
-
-        const rndTipoTrabajo = Math.random();
-        const trabajo = determinarTipoTrabajo(rndTipoTrabajo);
-        const tiempoTrabajo = generarTiempoTrabajo(trabajo);
-        
-        // Asignar valores a la fila
-        // Verificar que los RNDs sean únicos
-        if (rndsGenerados.has(rndLlegada)) {
-          console.warn(`RND duplicado detectado: ${rndLlegada.toFixed(4)}`);
-        }
-        if (rndsGenerados.has(rndTipoTrabajo)) {
-          console.warn(`RND duplicado detectado: ${rndTipoTrabajo.toFixed(4)}`);
-        }
-        rndsGenerados.add(rndLlegada);
-        rndsGenerados.add(rndTipoTrabajo);
-
-        const equipo = {
-          id: equiposSimulados.length + 1,
-          llegada: reloj,
-          tipo: trabajo,
-          duracion: tiempoTrabajo,
-          estado: "ER" // Esperando Reparación
-        };
-
-        fila.rndLlegada = rndLlegada;
-        fila.tiempoEntreLlegadas = tiempoEntreLlegadas;
-        fila.proximaLlegada = proximaLlegada;
-        fila.rndTipoTrabajo = rndTipoTrabajo;
-        fila.trabajo = trabajo;
-        fila.tiempoTrabajo = tiempoTrabajo;
-
-        equiposSimulados.push(equipo);
-        console.log(`Equipo ${equipo.id} creado: ${equipo.tipo}, duración: ${equipo.duracion}`);
-        console.log(`RNDs: llegada=${rndLlegada.toFixed(4)}, tipo=${rndTipoTrabajo.toFixed(4)}`);
-
-        // Asignar a técnico o cola
-        const tecnico1Libre = fila.tecnico1.estado === "libre";
-        const tecnico2Libre = fila.tecnico2.estado === "libre";
-
-        if (tecnico1Libre) {
-          fila.tecnico1.estado = "ocupado";
-          fila.tecnico1.equipo = equipo;
-          equipo.estado = "SR";
-          equipo.tecnico = 1;
-          fila.tiempoInicioOcupacionTec1 = reloj;
-          fila[`estado_${equipo.id}`] = "SR";
-          fila[`llegada_${equipo.id}`] = equipo.llegada.toFixed(2);
-
-          // Generar RND para fin de trabajo
-          const rndFinTrabajo = Math.random();
-          fila.rndFinTrabajo = rndFinTrabajo;
-
-          if (trabajo === "C") {
-            // Interrupción: técnico sale a los 25 min, regresa 10 min antes del fin
-            fila.finTrabajo1 = reloj + 25;
-            fila.retornoTrabajo1 = reloj + tiempoTrabajo - 10;
-            // Registrar la interrupción
-            fila.iniciarInterrupcionC(equipo, 1, reloj);
-          } else {
-            fila.finTrabajo1 = reloj + tiempoTrabajo;
-          }
-        } else if (tecnico2Libre) {
-          fila.tecnico2.estado = "ocupado";
-          fila.tecnico2.equipo = equipo;
-          equipo.estado = "SR";
-          equipo.tecnico = 2;
-          fila.tiempoInicioOcupacionTec2 = reloj;
-          fila[`estado_${equipo.id}`] = "SR";
-          fila[`llegada_${equipo.id}`] = equipo.llegada.toFixed(2);
-
-          // Generar RND para fin de trabajo
-          const rndFinTrabajo = Math.random();
-          fila.rndFinTrabajo = rndFinTrabajo;
-
-          if (trabajo === "C") {
-            fila.finTrabajo2 = reloj + 25;
-            fila.retornoTrabajo2 = reloj + tiempoTrabajo - 10;
-            // Registrar la interrupción
-            fila.iniciarInterrupcionC(equipo, 2, reloj);
-          } else {
-            fila.finTrabajo2 = reloj + tiempoTrabajo;
-          }
-        } else {
-          // Ambos técnicos ocupados
-          if (fila.colaEspera && fila.colaEspera.length < 3) {
-            fila.colaEspera.push(equipo);
-            fila[`estado_${equipo.id}`] = "ER";
-            fila[`llegada_${equipo.id}`] = equipo.llegada.toFixed(2);
-          } else {
-            equipo.estado = "R"; // Rechazado
-            fila[`estado_${equipo.id}`] = "R";
-            fila[`llegada_${equipo.id}`] = equipo.llegada.toFixed(2);
-            fila.equiposRechazados++;
-          }
-        }
-
-      } else if (proximo === anterior.finTrabajo1) {
-        fila.evento = "fin_trabajo_tec1";
-        // Limpiar valores de llegada ya que no es una llegada
-        fila.rndLlegada = -1;
-        fila.tiempoEntreLlegadas = -1;
-        fila.rndTipoTrabajo = -1;
-        fila.trabajo = "";
-        fila.rndFinTrabajo = -1;
-        fila.tiempoTrabajo = -1;
-        
-        // Fin trabajo técnico 1
-        const equipoFinalizado = anterior.tecnico1.equipo;
-        
-        if (equipoFinalizado) {
-          if (equipoFinalizado.tipo === "C" && anterior.retornoTrabajo1 > 0) {
-            // Interrupción: técnico sale, equipo queda en proceso
-            fila.tecnico1.estado = "libre";
-            fila.tecnico1.equipo = null;
-            fila.finTrabajo1 = -1;
-            // El equipo sigue en interrupción hasta el retorno
-            equipoFinalizado.estado = "INT"; // Interrumpido
-            fila[`estado_${equipoFinalizado.id}`] = "INT";
-          } else {
-            // Trabajo normal terminado
-            fila.tecnico1.estado = "libre";
-            fila.tecnico1.equipo = null;
-            fila.finTrabajo1 = -1;
-            equipoFinalizado.estado = "T";
-            fila[`estado_${equipoFinalizado.id}`] = "T";
-            fila.equiposAtendidos++;
-            
-            // Si era un trabajo C, finalizar la interrupción
-            if (equipoFinalizado.tipo === "C") {
-              fila.finalizarInterrupcionC(1);
-            }
-          }
-        }
-
-        // Asignar siguiente equipo de la cola
-        if (fila.tecnico1.estado === "libre" && fila.colaEspera.length > 0) {
-          const siguienteEquipo = fila.colaEspera.shift();
-          if (siguienteEquipo) {
-            fila.tecnico1.estado = "ocupado";
-            fila.tecnico1.equipo = siguienteEquipo;
-            siguienteEquipo.estado = "SR";
-            siguienteEquipo.tecnico = 1;
-            fila[`estado_${siguienteEquipo.id}`] = "SR";
-
-            // Generar RND para fin de trabajo
-            const rndFinTrabajo = Math.random();
-            fila.rndFinTrabajo = rndFinTrabajo;
-            fila.tiempoTrabajo = siguienteEquipo.duracion;
-
-            if (siguienteEquipo.tipo === "C") {
-              fila.finTrabajo1 = reloj + 25;
-              fila.retornoTrabajo1 = reloj + siguienteEquipo.duracion - 10;
-            } else {
-              fila.finTrabajo1 = reloj + siguienteEquipo.duracion;
-            }
-          }
-        }
-
-      } else if (proximo === anterior.finTrabajo2) {
-        fila.evento = "fin_trabajo_tec2";
-        // Limpiar valores de llegada ya que no es una llegada
-        fila.rndLlegada = -1;
-        fila.tiempoEntreLlegadas = -1;
-        fila.rndTipoTrabajo = -1;
-        fila.trabajo = "";
-        fila.rndFinTrabajo = -1;
-        fila.tiempoTrabajo = -1;
-        
-        // Fin trabajo técnico 2
-        const equipoFinalizado = anterior.tecnico2.equipo;
-        
-        if (equipoFinalizado) {
-          if (equipoFinalizado.tipo === "C" && anterior.retornoTrabajo2 > 0) {
-            fila.tecnico2.estado = "libre";
-            fila.tecnico2.equipo = null;
-            fila.finTrabajo2 = -1;
-            // El equipo sigue en interrupción hasta el retorno
-            equipoFinalizado.estado = "INT"; // Interrumpido
-            fila[`estado_${equipoFinalizado.id}`] = "INT";
-          } else {
-            fila.tecnico2.estado = "libre";
-            fila.tecnico2.equipo = null;
-            fila.finTrabajo2 = -1;
-            equipoFinalizado.estado = "T";
-            fila[`estado_${equipoFinalizado.id}`] = "T";
-            fila.equiposAtendidos++;
-            
-            // Si era un trabajo C, finalizar la interrupción
-            if (equipoFinalizado.tipo === "C") {
-              fila.finalizarInterrupcionC(2);
-            }
-          }
-        }
-
-        if (fila.tecnico2.estado === "libre" && fila.colaEspera.length > 0) {
-          const siguienteEquipo = fila.colaEspera.shift();
-          if (siguienteEquipo) {
-            fila.tecnico2.estado = "ocupado";
-            fila.tecnico2.equipo = siguienteEquipo;
-            siguienteEquipo.estado = "SR";
-            siguienteEquipo.tecnico = 2;
-            fila[`estado_${siguienteEquipo.id}`] = "SR";
-
-            // Generar RND para fin de trabajo
-            const rndFinTrabajo = Math.random();
-            fila.rndFinTrabajo = rndFinTrabajo;
-            fila.tiempoTrabajo = siguienteEquipo.duracion;
-
-            if (siguienteEquipo.tipo === "C") {
-              fila.finTrabajo2 = reloj + 25;
-              fila.retornoTrabajo2 = reloj + siguienteEquipo.duracion - 10;
-            } else {
-              fila.finTrabajo2 = reloj + siguienteEquipo.duracion;
-            }
-          }
-        }
-
-      } else if (proximo === anterior.retornoTrabajo1) {
-        fila.evento = "retorno_tec1";
-        // Limpiar valores de llegada ya que no es una llegada
-        fila.rndLlegada = -1;
-        fila.tiempoEntreLlegadas = -1;
-        fila.rndTipoTrabajo = -1;
-        fila.trabajo = "";
-        fila.rndFinTrabajo = -1;
-        fila.tiempoTrabajo = -1;
-        
-        // Retorno técnico 1 después de interrupción
-        fila.retornoTrabajo1 = -1;
-        fila.finTrabajo1 = reloj + 10; // Termina en 10 minutos
-        
-        // Buscar el equipo en interrupción y asignarlo al técnico
-        const interrupcion = fila.obtenerInterrupcionPorTecnico(1);
-        if (interrupcion) {
-          fila.tecnico1.estado = "ocupado";
-          fila.tecnico1.equipo = interrupcion.equipo;
-          interrupcion.equipo.estado = "SR";
-          interrupcion.equipo.tecnico = 1;
-        }
-
-      } else if (proximo === anterior.retornoTrabajo2) {
-        fila.evento = "retorno_tec2";
-        // Limpiar valores de llegada ya que no es una llegada
-        fila.rndLlegada = -1;
-        fila.tiempoEntreLlegadas = -1;
-        fila.rndTipoTrabajo = -1;
-        fila.trabajo = "";
-        fila.rndFinTrabajo = -1;
-        fila.tiempoTrabajo = -1;
-        
-        // Retorno técnico 2 después de interrupción
-        fila.retornoTrabajo2 = -1;
-        fila.finTrabajo2 = reloj + 10; // Termina en 10 minutos
-        
-        // Buscar el equipo en interrupción y asignarlo al técnico
-        const interrupcion = fila.obtenerInterrupcionPorTecnico(2);
-        if (interrupcion) {
-          fila.tecnico2.estado = "ocupado";
-          fila.tecnico2.equipo = interrupcion.equipo;
-          interrupcion.equipo.estado = "SR";
-          interrupcion.equipo.tecnico = 2;
-        }
+      // OPTIMIZACIÓN: Solo almacenar filas del rango solicitado
+      if (0 >= desde && 0 <= hasta) {
+        filasSimulacion.push(vectorActual.toRow());
       }
 
-      // Guardar referencia a equipos simulados en el vector de estado
-      fila.equiposSimulados = equiposSimulados;
+      let iteraciones = 0;
+      const maxIteraciones = cantidadSimulaciones * 20; // Límite de seguridad más alto
+      
+      while (equiposSimulados.length < cantidadSimulaciones && iteraciones < maxIteraciones) {
+        iteraciones++;
+        
+        if (iteraciones % 50 === 0) {
+          console.log(`Iteración ${iteraciones}, equipos simulados: ${equiposSimulados.length}, reloj: ${reloj.toFixed(2)}`);
+        }
+        
+        // OPTIMIZACIÓN: Intercambiar vectores en lugar de crear nuevos
+        [vectorAnterior, vectorActual] = [vectorActual, vectorAnterior];
+        vectorActual.copiarDesde(vectorAnterior);
 
-      // Actualizar equipos en la fila dinámicamente
-      equiposSimulados.forEach((eq, index) => {
-        if (eq && eq.llegada !== undefined) {
-          // Estado del equipo
-          fila[`estado_${index + 1}`] = eq.estado;
+        // Determinar próximo evento
+        const eventos = [
+          vectorAnterior.proximaLlegada,
+          vectorAnterior.finTrabajo1,
+          vectorAnterior.finTrabajo2,
+          vectorAnterior.retornoTrabajo1,
+          vectorAnterior.retornoTrabajo2
+        ].filter(e => e >= 0);
+
+        if (eventos.length === 0) {
+          console.log("No hay eventos activos, terminando simulación");
+          break;
+        }
+
+        const proximo = Math.min(...eventos);
+        reloj = proximo;
+        vectorActual.reloj = reloj;
+
+        console.log(`Evento: ${proximo}, Reloj: ${reloj.toFixed(2)}, Equipos: ${equiposSimulados.length}`);
+
+        // Procesar evento
+        if (proximo === vectorAnterior.proximaLlegada) {
+          vectorActual.evento = `llegada_equipo_${equiposSimulados.length + 1}`;
+          // Llegada de equipo
+          const rndLlegada = Math.random();
+          const tiempoEntreLlegadas = generarTiempoEntreLlegadas();
+          proximaLlegada = reloj + tiempoEntreLlegadas;
+
+          // Generar tipo de trabajo para la PRÓXIMA llegada
+          const rndProximaLlegada = Math.random();
+          const proximaLlegadaTipo = determinarTipoTrabajo(rndProximaLlegada);
+
+          const rndTipoTrabajo = Math.random();
+          const trabajo = determinarTipoTrabajo(rndTipoTrabajo);
+          const tiempoTrabajo = generarTiempoTrabajo(trabajo);
           
-          // Hora de llegada del equipo
-          fila[`llegada_${index + 1}`] = eq.llegada.toFixed(2);
-        } else {
-          fila[`estado_${index + 1}`] = "";
-          fila[`llegada_${index + 1}`] = "";
+          // Asignar valores al vector actual
+          // Verificar que los RNDs sean únicos
+          if (rndsGenerados.has(rndLlegada)) {
+            console.warn(`RND duplicado detectado: ${rndLlegada.toFixed(4)}`);
+          }
+          if (rndsGenerados.has(rndTipoTrabajo)) {
+            console.warn(`RND duplicado detectado: ${rndTipoTrabajo.toFixed(4)}`);
+          }
+          rndsGenerados.add(rndLlegada);
+          rndsGenerados.add(rndTipoTrabajo);
+
+          const equipo = {
+            id: equiposSimulados.length + 1,
+            llegada: reloj,
+            tipo: trabajo,
+            duracion: tiempoTrabajo,
+            estado: "ER" // Esperando Reparación
+          };
+
+          vectorActual.rndLlegada = rndLlegada;
+          vectorActual.tiempoEntreLlegadas = tiempoEntreLlegadas;
+          vectorActual.proximaLlegada = proximaLlegada;
+          vectorActual.proximaLlegadaTipo = proximaLlegadaTipo;
+          vectorActual.rndTipoTrabajo = rndTipoTrabajo;
+          vectorActual.trabajo = trabajo;
+          vectorActual.tiempoTrabajo = tiempoTrabajo;
+
+          equiposSimulados.push(equipo);
+          console.log(`Equipo ${equipo.id} creado: ${equipo.tipo}, duración: ${equipo.duracion}`);
+          console.log(`RNDs: llegada=${rndLlegada.toFixed(4)}, tipo=${rndTipoTrabajo.toFixed(4)}`);
+
+          // Asignar a técnico o cola
+          const tecnico1Libre = vectorActual.tecnico1.estado === "libre";
+          const tecnico2Libre = vectorActual.tecnico2.estado === "libre";
+
+          if (tecnico1Libre) {
+            vectorActual.tecnico1.estado = "ocupado";
+            vectorActual.tecnico1.equipo = equipo;
+            equipo.estado = "SR";
+            equipo.tecnico = 1;
+            vectorActual.tiempoInicioOcupacionTec1 = reloj;
+            vectorActual[`estado_${equipo.id}`] = "SR";
+            vectorActual[`llegada_${equipo.id}`] = equipo.llegada.toFixed(2);
+
+            // Generar RND para fin de trabajo
+            const rndFinTrabajo = Math.random();
+            vectorActual.rndFinTrabajo = rndFinTrabajo;
+
+            if (trabajo === "C") {
+              // Interrupción: técnico sale a los 25 min, regresa 10 min antes del fin
+              vectorActual.finTrabajo1 = reloj + 25;
+              vectorActual.retornoTrabajo1 = reloj + tiempoTrabajo - 10;
+              // Registrar la interrupción
+              vectorActual.iniciarInterrupcionC(equipo, 1, reloj);
+            } else {
+              vectorActual.finTrabajo1 = reloj + tiempoTrabajo;
+            }
+          } else if (tecnico2Libre) {
+            vectorActual.tecnico2.estado = "ocupado";
+            vectorActual.tecnico2.equipo = equipo;
+            equipo.estado = "SR";
+            equipo.tecnico = 2;
+            vectorActual.tiempoInicioOcupacionTec2 = reloj;
+            vectorActual[`estado_${equipo.id}`] = "SR";
+            vectorActual[`llegada_${equipo.id}`] = equipo.llegada.toFixed(2);
+
+            // Generar RND para fin de trabajo
+            const rndFinTrabajo = Math.random();
+            vectorActual.rndFinTrabajo = rndFinTrabajo;
+
+            if (trabajo === "C") {
+              vectorActual.finTrabajo2 = reloj + 25;
+              vectorActual.retornoTrabajo2 = reloj + tiempoTrabajo - 10;
+              // Registrar la interrupción
+              vectorActual.iniciarInterrupcionC(equipo, 2, reloj);
+            } else {
+              vectorActual.finTrabajo2 = reloj + tiempoTrabajo;
+            }
+          } else {
+            // Ambos técnicos ocupados
+            if (vectorActual.colaEspera && vectorActual.colaEspera.length < 3) {
+              vectorActual.colaEspera.push(equipo);
+              vectorActual[`estado_${equipo.id}`] = "ER";
+              vectorActual[`llegada_${equipo.id}`] = equipo.llegada.toFixed(2);
+            } else {
+              equipo.estado = "R"; // Rechazado
+              vectorActual[`estado_${equipo.id}`] = "R";
+              vectorActual[`llegada_${equipo.id}`] = equipo.llegada.toFixed(2);
+              vectorActual.equiposRechazados++;
+            }
+          }
+
+        } else if (proximo === vectorAnterior.finTrabajo1) {
+          vectorActual.evento = "fin_trabajo_tec1";
+          // Limpiar valores de llegada ya que no es una llegada
+          vectorActual.rndLlegada = -1;
+          vectorActual.tiempoEntreLlegadas = -1;
+          vectorActual.proximaLlegadaTipo = "";
+          vectorActual.rndTipoTrabajo = -1;
+          vectorActual.trabajo = "";
+          vectorActual.rndFinTrabajo = -1;
+          vectorActual.tiempoTrabajo = -1;
+          
+          // Fin trabajo técnico 1
+          const equipoFinalizado = vectorAnterior.tecnico1.equipo;
+          
+          if (equipoFinalizado) {
+            if (equipoFinalizado.tipo === "C" && vectorAnterior.retornoTrabajo1 > 0) {
+              // Interrupción: técnico sale, equipo queda en proceso
+              vectorActual.tecnico1.estado = "libre";
+              vectorActual.tecnico1.equipo = null;
+              vectorActual.finTrabajo1 = -1;
+              // El equipo sigue en interrupción hasta el retorno
+              equipoFinalizado.estado = "INT"; // Interrumpido
+              vectorActual[`estado_${equipoFinalizado.id}`] = "INT";
+            } else {
+              // Trabajo normal terminado
+              vectorActual.tecnico1.estado = "libre";
+              vectorActual.tecnico1.equipo = null;
+              vectorActual.finTrabajo1 = -1;
+              equipoFinalizado.estado = "T";
+              vectorActual[`estado_${equipoFinalizado.id}`] = "T";
+              vectorActual.equiposAtendidos++;
+              
+              // Si era un trabajo C, finalizar la interrupción
+              if (equipoFinalizado.tipo === "C") {
+                vectorActual.finalizarInterrupcionC(1);
+              }
+            }
+          }
+
+          // Asignar siguiente equipo de la cola
+          if (vectorActual.tecnico1.estado === "libre" && vectorActual.colaEspera.length > 0) {
+            const siguienteEquipo = vectorActual.colaEspera.shift();
+            if (siguienteEquipo) {
+              vectorActual.tecnico1.estado = "ocupado";
+              vectorActual.tecnico1.equipo = siguienteEquipo;
+              siguienteEquipo.estado = "SR";
+              siguienteEquipo.tecnico = 1;
+              vectorActual[`estado_${siguienteEquipo.id}`] = "SR";
+
+              // Generar RND para fin de trabajo
+              const rndFinTrabajo = Math.random();
+              vectorActual.rndFinTrabajo = rndFinTrabajo;
+              vectorActual.tiempoTrabajo = siguienteEquipo.duracion;
+
+              if (siguienteEquipo.tipo === "C") {
+                vectorActual.finTrabajo1 = reloj + 25;
+                vectorActual.retornoTrabajo1 = reloj + siguienteEquipo.duracion - 10;
+              } else {
+                vectorActual.finTrabajo1 = reloj + siguienteEquipo.duracion;
+              }
+            }
+          }
+
+        } else if (proximo === vectorAnterior.finTrabajo2) {
+          vectorActual.evento = "fin_trabajo_tec2";
+          // Limpiar valores de llegada ya que no es una llegada
+          vectorActual.rndLlegada = -1;
+          vectorActual.tiempoEntreLlegadas = -1;
+          vectorActual.proximaLlegadaTipo = "";
+          vectorActual.rndTipoTrabajo = -1;
+          vectorActual.trabajo = "";
+          vectorActual.rndFinTrabajo = -1;
+          vectorActual.tiempoTrabajo = -1;
+          
+          // Fin trabajo técnico 2
+          const equipoFinalizado = vectorAnterior.tecnico2.equipo;
+          
+          if (equipoFinalizado) {
+            if (equipoFinalizado.tipo === "C" && vectorAnterior.retornoTrabajo2 > 0) {
+              vectorActual.tecnico2.estado = "libre";
+              vectorActual.tecnico2.equipo = null;
+              vectorActual.finTrabajo2 = -1;
+              // El equipo sigue en interrupción hasta el retorno
+              equipoFinalizado.estado = "INT"; // Interrumpido
+              vectorActual[`estado_${equipoFinalizado.id}`] = "INT";
+            } else {
+              vectorActual.tecnico2.estado = "libre";
+              vectorActual.tecnico2.equipo = null;
+              vectorActual.finTrabajo2 = -1;
+              equipoFinalizado.estado = "T";
+              vectorActual[`estado_${equipoFinalizado.id}`] = "T";
+              vectorActual.equiposAtendidos++;
+              
+              // Si era un trabajo C, finalizar la interrupción
+              if (equipoFinalizado.tipo === "C") {
+                vectorActual.finalizarInterrupcionC(2);
+              }
+            }
+          }
+
+          if (vectorActual.tecnico2.estado === "libre" && vectorActual.colaEspera.length > 0) {
+            const siguienteEquipo = vectorActual.colaEspera.shift();
+            if (siguienteEquipo) {
+              vectorActual.tecnico2.estado = "ocupado";
+              vectorActual.tecnico2.equipo = siguienteEquipo;
+              siguienteEquipo.estado = "SR";
+              siguienteEquipo.tecnico = 2;
+              vectorActual[`estado_${siguienteEquipo.id}`] = "SR";
+
+              // Generar RND para fin de trabajo
+              const rndFinTrabajo = Math.random();
+              vectorActual.rndFinTrabajo = rndFinTrabajo;
+              vectorActual.tiempoTrabajo = siguienteEquipo.duracion;
+
+              if (siguienteEquipo.tipo === "C") {
+                vectorActual.finTrabajo2 = reloj + 25;
+                vectorActual.retornoTrabajo2 = reloj + siguienteEquipo.duracion - 10;
+              } else {
+                vectorActual.finTrabajo2 = reloj + siguienteEquipo.duracion;
+              }
+            }
+          }
+
+        } else if (proximo === vectorAnterior.retornoTrabajo1) {
+          vectorActual.evento = "retorno_tec1";
+          // Limpiar valores de llegada ya que no es una llegada
+          vectorActual.rndLlegada = -1;
+          vectorActual.tiempoEntreLlegadas = -1;
+          vectorActual.proximaLlegadaTipo = "";
+          vectorActual.rndTipoTrabajo = -1;
+          vectorActual.trabajo = "";
+          vectorActual.rndFinTrabajo = -1;
+          vectorActual.tiempoTrabajo = -1;
+          
+          // Retorno técnico 1 después de interrupción
+          vectorActual.retornoTrabajo1 = -1;
+          vectorActual.finTrabajo1 = reloj + 10; // Termina en 10 minutos
+          
+          // Buscar el equipo en interrupción y asignarlo al técnico
+          const interrupcion = vectorActual.obtenerInterrupcionPorTecnico(1);
+          if (interrupcion) {
+            vectorActual.tecnico1.estado = "ocupado";
+            vectorActual.tecnico1.equipo = interrupcion.equipo;
+            interrupcion.equipo.estado = "SR";
+            interrupcion.equipo.tecnico = 1;
+          }
+
+        } else if (proximo === vectorAnterior.retornoTrabajo2) {
+          vectorActual.evento = "retorno_tec2";
+          // Limpiar valores de llegada ya que no es una llegada
+          vectorActual.rndLlegada = -1;
+          vectorActual.tiempoEntreLlegadas = -1;
+          vectorActual.proximaLlegadaTipo = "";
+          vectorActual.rndTipoTrabajo = -1;
+          vectorActual.trabajo = "";
+          vectorActual.rndFinTrabajo = -1;
+          vectorActual.tiempoTrabajo = -1;
+          
+          // Retorno técnico 2 después de interrupción
+          vectorActual.retornoTrabajo2 = -1;
+          vectorActual.finTrabajo2 = reloj + 10; // Termina en 10 minutos
+          
+          // Buscar el equipo en interrupción y asignarlo al técnico
+          const interrupcion = vectorActual.obtenerInterrupcionPorTecnico(2);
+          if (interrupcion) {
+            vectorActual.tecnico2.estado = "ocupado";
+            vectorActual.tecnico2.equipo = interrupcion.equipo;
+            interrupcion.equipo.estado = "SR";
+            interrupcion.equipo.tecnico = 2;
+          }
         }
-      });
 
-      // Calcular variables estadísticas
-      
-      // Calcular ocupación de técnicos de manera más precisa
-      const tiempoTotal = reloj;
-      
-      // Técnico 1: ocupado si está trabajando o si tiene un equipo asignado
-      const tecnico1Ocupado = fila.tecnico1.estado === "ocupado" || fila.tecnico1.equipo !== null;
-      if (tecnico1Ocupado && fila.tiempoInicioOcupacionTec1 === -1) {
-        fila.tiempoInicioOcupacionTec1 = reloj;
+        // Guardar referencia a equipos simulados en el vector de estado
+        vectorActual.equiposSimulados = equiposSimulados;
+
+        // Actualizar equipos en el vector dinámicamente
+        equiposSimulados.forEach((eq, index) => {
+          if (eq && eq.llegada !== undefined) {
+            // Estado del equipo
+            vectorActual[`estado_${index + 1}`] = eq.estado;
+            
+            // Hora de llegada del equipo
+            vectorActual[`llegada_${index + 1}`] = eq.llegada.toFixed(2);
+          } else {
+            vectorActual[`estado_${index + 1}`] = "";
+            vectorActual[`llegada_${index + 1}`] = "";
+          }
+        });
+
+        // Calcular variables estadísticas
+        
+        // Calcular ocupación de técnicos de manera acumulativa
+        const tiempoTotal = reloj;
+        
+        // Acumular tiempo de ocupación de técnico 1
+        if (vectorActual.tecnico1.estado === "ocupado") {
+          if (vectorActual.tiempoInicioOcupacionTec1 === -1) {
+            vectorActual.tiempoInicioOcupacionTec1 = reloj;
+          }
+          vectorActual.usoTecnico1 = vectorAnterior.usoTecnico1 + (reloj - vectorAnterior.reloj);
+        } else {
+          vectorActual.usoTecnico1 = vectorAnterior.usoTecnico1;
+          vectorActual.tiempoInicioOcupacionTec1 = -1;
+        }
+        
+        // Acumular tiempo de ocupación de técnico 2
+        if (vectorActual.tecnico2.estado === "ocupado") {
+          if (vectorActual.tiempoInicioOcupacionTec2 === -1) {
+            vectorActual.tiempoInicioOcupacionTec2 = reloj;
+          }
+          vectorActual.usoTecnico2 = vectorAnterior.usoTecnico2 + (reloj - vectorAnterior.reloj);
+        } else {
+          vectorActual.usoTecnico2 = vectorAnterior.usoTecnico2;
+          vectorActual.tiempoInicioOcupacionTec2 = -1;
+        }
+        
+        // Calcular porcentajes de ocupación
+        vectorActual.porcentajeOcupacionTec1 = tiempoTotal > 0 ? (vectorActual.usoTecnico1 / tiempoTotal) * 100 : 0;
+        vectorActual.porcentajeOcupacionTec2 = tiempoTotal > 0 ? (vectorActual.usoTecnico2 / tiempoTotal) * 100 : 0;
+        
+        // Calcular porcentaje de ocupación de ambos técnicos (promedio)
+        vectorActual.porcentajeOcupacionAmbos = (vectorActual.porcentajeOcupacionTec1 + vectorActual.porcentajeOcupacionTec2) / 2;
+        
+        // Calcular otras estadísticas
+        const equiposTerminados = equiposSimulados.filter(eq => eq.estado === "T");
+        const equiposRechazados = equiposSimulados.filter(eq => eq.estado === "R");
+        
+        // Acumulado de permanencia
+        if (equiposTerminados.length > 0) {
+          const tiempoTotalPermanencia = equiposTerminados
+            .reduce((total, eq) => total + (reloj - eq.llegada), 0);
+          vectorActual.acumuladoPermanencia = tiempoTotalPermanencia;
+          vectorActual.promedioPermanencia = tiempoTotalPermanencia / equiposTerminados.length;
+        } else {
+          vectorActual.acumuladoPermanencia = 0;
+          vectorActual.promedioPermanencia = 0;
+        }
+        
+        // Cantidad de equipos finalizados
+        vectorActual.cantidadEquiposFinalizados = equiposTerminados.length;
+        
+        // Porcentaje de equipos rechazados
+        vectorActual.porcentajeRechazados = equiposSimulados.length > 0 ? 
+          (equiposRechazados.length / equiposSimulados.length) * 100 : 0;
+
+
+
+        // OPTIMIZACIÓN: Solo guardar en memoria las filas del rango solicitado
+        if (iteraciones >= desde && iteraciones <= hasta) {
+          filasSimulacion.push(vectorActual.toRow());
+        }
+        
+        // OPTIMIZACIÓN: Terminar la simulación si ya tenemos suficientes equipos Y pasamos el rango
+        if (iteraciones > hasta && equiposSimulados.length >= cantidadSimulaciones) {
+          console.log(`Simulación terminada temprano: ${equiposSimulados.length} equipos, iteración ${iteraciones}`);
+          break;
+        }
+        
+        // OPTIMIZACIÓN: Si ya pasamos el rango y tenemos suficientes equipos, saltar procesamiento pesado
+        if (iteraciones > hasta && equiposSimulados.length >= cantidadSimulaciones) {
+          continue; // Saltar al siguiente ciclo sin procesar eventos
+        }
       }
       
-      // Técnico 2: ocupado si está trabajando o si tiene un equipo asignado
-      const tecnico2Ocupado = fila.tecnico2.estado === "ocupado" || fila.tecnico2.equipo !== null;
-      if (tecnico2Ocupado && fila.tiempoInicioOcupacionTec2 === -1) {
-        fila.tiempoInicioOcupacionTec2 = reloj;
+      console.log(`Simulación completada. Iteraciones: ${iteraciones}, Equipos: ${equiposSimulados.length}`);
+      
+      if (iteraciones >= maxIteraciones) {
+        console.warn("¡ADVERTENCIA! Se alcanzó el límite máximo de iteraciones");
       }
-      
-      // Acumular tiempo de ocupación
-      if (tecnico1Ocupado) {
-        fila.usoTecnico1 = (fila.tiempoInicioOcupacionTec1 >= 0) ? 
-          (reloj - fila.tiempoInicioOcupacionTec1) : 0;
-      }
-      
-      if (tecnico2Ocupado) {
-        fila.usoTecnico2 = (fila.tiempoInicioOcupacionTec2 >= 0) ? 
-          (reloj - fila.tiempoInicioOcupacionTec2) : 0;
-      }
-      
-      // Calcular porcentajes de ocupación (siempre)
-      fila.porcentajeOcupacionTec1 = tiempoTotal > 0 ? (fila.usoTecnico1 / tiempoTotal) * 100 : 0;
-      fila.porcentajeOcupacionTec2 = tiempoTotal > 0 ? (fila.usoTecnico2 / tiempoTotal) * 100 : 0;
-      
-      // Calcular porcentaje de ocupación de ambos técnicos (siempre)
-      const tiempoOcupadoAmbos = fila.usoTecnico1 + fila.usoTecnico2;
-      fila.porcentajeOcupacionAmbos = tiempoTotal > 0 ? (tiempoOcupadoAmbos / tiempoTotal) * 100 : 0;
-      
-      // Calcular otras estadísticas
-      const equiposTerminados = equiposSimulados.filter(eq => eq.estado === "T");
-      const equiposRechazados = equiposSimulados.filter(eq => eq.estado === "R");
-      
-      // Acumulado de permanencia
-      if (equiposTerminados.length > 0) {
-        const tiempoTotalPermanencia = equiposTerminados
-          .reduce((total, eq) => total + (reloj - eq.llegada), 0);
-        fila.acumuladoPermanencia = tiempoTotalPermanencia;
-        fila.promedioPermanencia = tiempoTotalPermanencia / equiposTerminados.length;
-      } else {
-        fila.acumuladoPermanencia = 0;
-        fila.promedioPermanencia = 0;
-      }
-      
-      // Cantidad de equipos finalizados
-      fila.cantidadEquiposFinalizados = equiposTerminados.length;
-      
-      // Porcentaje de equipos rechazados
-      fila.porcentajeRechazados = equiposSimulados.length > 0 ? 
-        (equiposRechazados.length / equiposSimulados.length) * 100 : 0;
 
+      // Ya no necesitamos hacer slice porque solo guardamos las filas del rango
+      console.log("Filas a mostrar:", filasSimulacion.length);
+      setFilas(filasSimulacion);
 
+      // Calcular métricas finales
+      const equiposAtendidos = equiposSimulados.filter(eq => eq.estado === "T").length;
+      const tiempoTotalPermanencia = equiposSimulados
+        .filter(eq => eq.estado === "T")
+        .reduce((total, eq) => total + (reloj - eq.llegada), 0);
+      const promedioPermanencia = equiposAtendidos > 0 ? tiempoTotalPermanencia / equiposAtendidos : 0;
+      const porcentajeRechazados = (vectorActual.equiposRechazados / equiposSimulados.length) * 100;
+      const porcentajeOcupacionTec1 = reloj > 0 ? (vectorActual.usoTecnico1 / reloj) * 100 : 0;
+      const porcentajeOcupacionTec2 = reloj > 0 ? (vectorActual.usoTecnico2 / reloj) * 100 : 0;
+      const porcentajeOcupacionAmbos = (porcentajeOcupacionTec1 + porcentajeOcupacionTec2) / 2;
 
-      filasSimulacion.push(fila.toRow());
-    }
-    
-    console.log(`Simulación completada. Iteraciones: ${iteraciones}, Equipos: ${equiposSimulados.length}`);
-    
-    if (iteraciones >= maxIteraciones) {
-      console.warn("¡ADVERTENCIA! Se alcanzó el límite máximo de iteraciones");
-    }
-
-    // Mostrar solo el rango solicitado
-    const filasMostrar = filasSimulacion.slice(desde, hasta + 1);
-    console.log("Filas a mostrar:", filasMostrar.length);
-    setFilas(filasMostrar);
-
-    // Calcular métricas finales
-    const equiposAtendidos = equiposSimulados.filter(eq => eq.estado === "T").length;
-    const tiempoTotalPermanencia = equiposSimulados
-      .filter(eq => eq.estado === "T")
-      .reduce((total, eq) => total + (reloj - eq.llegada), 0);
-    const promedioPermanencia = equiposAtendidos > 0 ? tiempoTotalPermanencia / equiposAtendidos : 0;
-    const porcentajeRechazados = (fila.equiposRechazados / equiposSimulados.length) * 100;
-    const porcentajeOcupacionTec1 = reloj > 0 ? (fila.usoTecnico1 / reloj) * 100 : 0;
-    const porcentajeOcupacionTec2 = reloj > 0 ? (fila.usoTecnico2 / reloj) * 100 : 0;
-    const porcentajeOcupacionAmbos = reloj > 0 ? ((fila.usoTecnico1 + fila.usoTecnico2) / reloj) * 100 : 0;
-
-    console.log("=== RESULTADOS DE LA SIMULACIÓN ===");
-    console.log("a) Promedio de permanencia en el laboratorio:", promedioPermanencia.toFixed(2), "minutos");
-    console.log("b) Porcentaje de equipos rechazados:", porcentajeRechazados.toFixed(2) + "%");
-    console.log("c) Porcentaje de ocupación técnico 1:", porcentajeOcupacionTec1.toFixed(2) + "%");
-    console.log("   Porcentaje de ocupación técnico 2:", porcentajeOcupacionTec2.toFixed(2) + "%");
-    console.log("   Porcentaje de ocupación ambos técnicos:", porcentajeOcupacionAmbos.toFixed(2) + "%");
-    console.log("=====================================");
-    } catch (error) {
-      console.error("Error en la simulación:", error);
-      alert("Error en la simulación: " + error.message);
-    }
+      console.log("=== RESULTADOS DE LA SIMULACIÓN ===");
+      console.log("a) Promedio de permanencia en el laboratorio:", promedioPermanencia.toFixed(2), "minutos");
+      console.log("b) Porcentaje de equipos rechazados:", porcentajeRechazados.toFixed(2) + "%");
+      console.log("c) Porcentaje de ocupación técnico 1:", porcentajeOcupacionTec1.toFixed(2) + "%");
+      console.log("   Porcentaje de ocupación técnico 2:", porcentajeOcupacionTec2.toFixed(2) + "%");
+      console.log("   Porcentaje de ocupación ambos técnicos:", porcentajeOcupacionAmbos.toFixed(2) + "%");
+      console.log("=====================================");
+             } catch (error) {
+         console.error("Error en la simulación:", error);
+         alert("Error en la simulación: " + error.message);
+       } finally {
+         setCargando(false);
+       }
+     }, 100);
   };
 
   const generarTiempoEntreLlegadas = () => {
@@ -522,6 +560,14 @@ const SimulacionLaboratorio = () => {
 
   return (
     <div className="p-4">
+      {/* Overlay de carga */}
+      {cargando && (
+        <div className="fixed inset-0 flex items-center justify-center bg-black bg-opacity-30 z-50">
+          <div className="bg-white p-6 rounded shadow text-xl font-bold animate-pulse">
+            Cargando simulación...
+          </div>
+        </div>
+      )}
       <div className="max-w-7xl mx-auto space-y-4">
         {/* Header */}
         <div className="text-center">
@@ -609,27 +655,27 @@ const SimulacionLaboratorio = () => {
                             <thead>
                 {/* Primera fila de encabezados agrupados */}
                 <tr className="bg-gray-200">
+                  <th rowSpan="2" className="border px-2 py-1 text-center bg-blue-100">Evento</th>
                   <th rowSpan="2" className="border px-2 py-1 text-center bg-blue-100">Reloj</th>
                   
                   {/* LLEGADAS */}
-                  <th colSpan="3" className="border px-2 py-1 text-center bg-blue-200">Llegadas</th>
+                  <th colSpan="3" className="border px-2 py-1 text-center bg-blue-200">Llegada de equipos</th>
+                  
+                  {/* TIPO TRABAJO */}
+                  <th colSpan="2" className="border px-2 py-1 text-center bg-yellow-200">Tipo trabajo</th>
                   
                   {/* FIN DE TRABAJO */}
                   <th colSpan="4" className="border px-2 py-1 text-center bg-orange-200">Fin de Trabajo</th>
                   
                   {/* TÉCNICOS */}
-                  <th colSpan="4" className="border px-2 py-1 text-center bg-gray-200">Técnicos</th>
-                  
-                  {/* COLUMNAS INDIVIDUALES */}
-                  <th rowSpan="2" className="border px-2 py-1 text-center bg-green-200">Cola</th>
-                  <th rowSpan="2" className="border px-2 py-1 text-center bg-green-200">Acumulado permanencia</th>
+                  <th colSpan="5" className="border px-2 py-1 text-center bg-gray-200">Técnicos</th>
                   
                   {/* VARIABLES ESTADÍSTICAS */}
-                  <th colSpan="6" className="border px-2 py-1 text-center bg-green-200">Variables Estadísticas</th>
+                  <th colSpan="7" className="border px-2 py-1 text-center bg-green-200">Variables Estadísticas</th>
                   
                   {/* EQUIPOS - Encabezados individuales */}
                   {Array.from({length: filas.length > 0 ? filas[0].equiposSimulados?.length || 10 : 10}, (_, i) => (
-                    <th key={i} colSpan="1" className="border px-2 py-1 text-center bg-purple-200">
+                    <th key={i} colSpan="2" className="border px-2 py-1 text-center bg-purple-200">
                       EQUIPO {i + 1}
                     </th>
                   ))}
@@ -640,7 +686,11 @@ const SimulacionLaboratorio = () => {
                   {/* LLEGADAS */}
                   <th className="border px-2 py-1 text-center bg-blue-200">RND</th>
                   <th className="border px-2 py-1 text-center bg-blue-200">Tiempo entre llegadas</th>
-                  <th className="border px-2 py-1 text-center bg-blue-200">Próxima llegada Tipo</th>
+                  <th className="border px-2 py-1 text-center bg-blue-200">Próxima llegada</th>
+                  
+                  {/* TIPO TRABAJO */}
+                  <th className="border px-2 py-1 text-center bg-yellow-200">RND</th>
+                  <th className="border px-2 py-1 text-center bg-yellow-200">Tipo trabajo</th>
                   
                   {/* FIN DE TRABAJO */}
                   <th className="border px-2 py-1 text-center bg-orange-200">RND</th>
@@ -653,8 +703,10 @@ const SimulacionLaboratorio = () => {
                   <th className="border px-2 py-1 text-center bg-gray-200">Retorno 2</th>
                   <th className="border px-2 py-1 text-center bg-gray-200">Técnico 1</th>
                   <th className="border px-2 py-1 text-center bg-gray-200">Técnico 2</th>
+                  <th className="border px-2 py-1 text-center bg-gray-200">Cola</th>
                   
                   {/* VARIABLES ESTADÍSTICAS */}
+                  <th className="border px-2 py-1 text-center bg-green-200">Acumulado permanencia</th>
                   <th className="border px-2 py-1 text-center bg-green-200">Cantidad equipos finalizados</th>
                   <th className="border px-2 py-1 text-center bg-green-200">Promedio permanencia</th>
                   <th className="border px-2 py-1 text-center bg-green-200">% Rechazados</th>
@@ -678,12 +730,19 @@ const SimulacionLaboratorio = () => {
             <tbody>
               {filas.map((fila, idx) => (
                   <tr key={idx} className={idx % 2 === 0 ? 'bg-white' : 'bg-gray-100'}>
+                    {/* EVENTO */}
+                    <td className="border px-2 py-1 text-center">{fila.evento}</td>
+                    
                     {/* RELOJ */}
                     <td className="border px-2 py-1 text-center">{fila.reloj}</td>
                     
                     {/* LLEGADAS */}
                     <td className="border px-2 py-1 text-center">{fila.rndLlegada}</td>
                     <td className="border px-2 py-1 text-center">{fila.tiempoEntreLlegadas}</td>
+                    <td className="border px-2 py-1 text-center">{fila.proximaLlegada}</td>
+                    
+                    {/* TIPO TRABAJO */}
+                    <td className="border px-2 py-1 text-center">{fila.rndTipoTrabajo}</td>
                     <td className="border px-2 py-1 text-center">{fila.trabajo}</td>
                     
                     {/* FIN DE TRABAJO */}
@@ -697,12 +756,10 @@ const SimulacionLaboratorio = () => {
                     <td className="border px-2 py-1 text-center">{fila.retornoTrabajo2}</td>
                     <td className="border px-2 py-1 text-center">{fila.tecnico1}</td>
                     <td className="border px-2 py-1 text-center">{fila.tecnico2}</td>
-                    
-                    {/* COLUMNAS INDIVIDUALES */}
                     <td className="border px-2 py-1 text-center">{fila.cola}</td>
-                    <td className="border px-2 py-1 text-center">{fila.acumuladoPermanencia}</td>
                     
                     {/* VARIABLES ESTADÍSTICAS */}
+                    <td className="border px-2 py-1 text-center">{fila.acumuladoPermanencia}</td>
                     <td className="border px-2 py-1 text-center">{fila.cantidadEquiposFinalizados}</td>
                     <td className="border px-2 py-1 text-center">{fila.promedioPermanencia}</td>
                     <td className="border px-2 py-1 text-center">{fila.porcentajeRechazados}</td>
@@ -712,9 +769,14 @@ const SimulacionLaboratorio = () => {
                     
                     {/* EQUIPOS */}
                     {Array.from({length: filas.length > 0 ? filas[0].equiposSimulados?.length || 10 : 10}, (_, i) => (
-                      <td key={i} className="border px-2 py-1 text-center">
-                        {fila[`estado_${i + 1}`] || ""}
-                      </td>
+                      <React.Fragment key={i}>
+                        <td className="border px-2 py-1 text-center">
+                          {fila[`estado_${i + 1}`] || ""}
+                        </td>
+                        <td className="border px-2 py-1 text-center">
+                          {fila[`llegada_${i + 1}`] || ""}
+                        </td>
+                      </React.Fragment>
                     ))}
                 </tr>
               ))}

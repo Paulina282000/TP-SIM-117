@@ -1,13 +1,14 @@
 // src/VectorEstadoLaboratorio.js
 
 export default class VectorEstadoLaboratorio {
-  constructor() {
-    this.evento = "inicio_simulacion";
-    this.reloj = 0;
+     constructor() {
+     this.evento = "inicialización";
+     this.reloj = 0;
 
-    this.rndLlegada = -1;
-    this.tiempoEntreLlegadas = -1;
-    this.proximaLlegada = 0;
+         this.rndLlegada = -1;
+     this.tiempoEntreLlegadas = -1;
+     this.proximaLlegada = 0;
+     this.proximaLlegadaTipo = "";
 
          this.rndTipoTrabajo = -1;
      this.trabajo = "";
@@ -40,11 +41,12 @@ export default class VectorEstadoLaboratorio {
   }
 
      copiarDesde(v) {
-     this.evento = v.evento;
+     this.evento = v.evento || "";
      this.reloj = v.reloj;
      this.rndLlegada = v.rndLlegada;
      this.tiempoEntreLlegadas = v.tiempoEntreLlegadas;
      this.proximaLlegada = v.proximaLlegada;
+     this.proximaLlegadaTipo = v.proximaLlegadaTipo;
      this.rndTipoTrabajo = v.rndTipoTrabajo;
      this.trabajo = v.trabajo;
      this.rndFinTrabajo = v.rndFinTrabajo;
@@ -79,16 +81,17 @@ export default class VectorEstadoLaboratorio {
      }
    }
 
-  toRow() {
-    const baseRow = {
-      // EVENTO Y RELOJ
-      evento: this.evento,
-      reloj: this.reloj.toFixed(2),
+     toRow() {
+     const baseRow = {
+       // EVENTO Y RELOJ
+       evento: this.evento || "",
+       reloj: this.reloj.toFixed(2),
       
-             // LLEGADAS (objetos temporales de llegada)
-       rndLlegada: this.rndLlegada >= 0 ? this.rndLlegada.toFixed(2) : "",
-       tiempoEntreLlegadas: this.tiempoEntreLlegadas >= 0 ? this.tiempoEntreLlegadas.toFixed(2) : "",
-       proximaLlegada: this.proximaLlegada >= 0 ? this.proximaLlegada.toFixed(2) : "",
+                    // LLEGADAS (objetos temporales de llegada)
+        rndLlegada: this.rndLlegada >= 0 ? this.rndLlegada.toFixed(2) : "",
+        tiempoEntreLlegadas: this.tiempoEntreLlegadas >= 0 ? this.tiempoEntreLlegadas.toFixed(2) : "",
+        proximaLlegada: this.proximaLlegada >= 0 ? this.proximaLlegada.toFixed(2) : "",
+        proximaLlegadaTipo: this.proximaLlegadaTipo || "",
       
              // FIN DE TRABAJO (objetos temporales de fin de servicio)
        rndTipoTrabajo: this.rndTipoTrabajo >= 0 ? this.rndTipoTrabajo.toFixed(2) : "",
