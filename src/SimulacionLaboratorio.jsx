@@ -729,7 +729,7 @@ const SimulacionLaboratorio = () => {
                   <th colSpan="7" className="border px-2 py-1 text-center bg-green-200">Variables Estadísticas</th>
                   
                   {/* EQUIPOS - Encabezados individuales */}
-                  {Array.from({length: filas.length > 0 ? filas[0].equiposSimulados?.length || 20 : 20}, (_, i) => (
+                  {Array.from({length: filas.length > 0 ? filas[0].equiposSimulados?.length || 50 : 50}, (_, i) => (
                     <th key={i} colSpan="2" className="border px-2 py-1 text-center bg-purple-200">
                       EQUIPO {i + 1}
                     </th>
@@ -770,7 +770,7 @@ const SimulacionLaboratorio = () => {
                   <th className="border px-2 py-1 text-center bg-green-200">% Ocupación Ambos</th>
                   
                   {/* EQUIPOS - Sub-columnas */}
-                  {Array.from({length: filas.length > 0 ? filas[0].equiposSimulados?.length || 20 : 20}, (_, i) => (
+                  {Array.from({length: filas.length > 0 ? filas[0].equiposSimulados?.length || 50 : 50}, (_, i) => (
                     <React.Fragment key={i}>
                       <th className="border px-2 py-1 text-center bg-purple-200 min-w-[100px]">
                         estado
@@ -823,7 +823,7 @@ const SimulacionLaboratorio = () => {
                     <td className="border px-2 py-1 text-center">{fila.porcentajeOcupacionAmbos}</td>
                     
                     {/* EQUIPOS */}
-                    {Array.from({length: filas.length > 0 ? filas[0].equiposSimulados?.length || 20 : 20}, (_, i) => (
+                    {Array.from({length: filas.length > 0 ? filas[0].equiposSimulados?.length || 50 : 50}, (_, i) => (
                       <React.Fragment key={i}>
                         <td className="border px-2 py-1 text-center">
                           {fila[`estado_${i + 1}`] || ""}
