@@ -38,6 +38,9 @@ export default class VectorEstadoLaboratorio {
     this.equiposEnInterrupcion = []; // Equipos C que están en interrupción
     this.tiempoInicioInterrupcion1 = -1; // Cuándo empezó la interrupción del técnico 1
     this.tiempoInicioInterrupcion2 = -1; // Cuándo empezó la interrupción del técnico 2
+    
+    // NUEVAS PROPIEDADES PARA INTERRUPCIÓN TEMPORAL
+    this.equiposInterrumpidosTemporalmente = []; // Equipos interrumpidos temporalmente por retorno de C
   }
 
      copiarDesde(v) {
@@ -68,6 +71,7 @@ export default class VectorEstadoLaboratorio {
      this.equiposEnInterrupcion = [...v.equiposEnInterrupcion];
      this.tiempoInicioInterrupcion1 = v.tiempoInicioInterrupcion1;
      this.tiempoInicioInterrupcion2 = v.tiempoInicioInterrupcion2;
+     this.equiposInterrumpidosTemporalmente = [...v.equiposInterrumpidosTemporalmente];
      this.equiposSimulados = v.equiposSimulados;
      
      // Copiar propiedades dinámicas de equipos
@@ -115,7 +119,7 @@ export default class VectorEstadoLaboratorio {
        porcentajeRechazados: this.porcentajeRechazados ? this.porcentajeRechazados.toFixed(2) + "%" : "",
        porcentajeOcupacionTec1: this.porcentajeOcupacionTec1 ? this.porcentajeOcupacionTec1.toFixed(2) + "%" : "",
        porcentajeOcupacionTec2: this.porcentajeOcupacionTec2 ? this.porcentajeOcupacionTec2.toFixed(2) + "%" : "",
-       porcentajeOcupacionAmbos: this.porcentajeOcupacionAmbos ? this.porcentajeOcupacionAmbos.toFixed(2) : "",
+       porcentajeOcupacionAmbos: this.porcentajeOcupacionAmbos ? this.porcentajeOcupacionAmbos.toFixed(2) + "%" : "",
       
       // Información para renderizado dinámico
       equiposSimulados: this.equiposSimulados || [],
@@ -169,6 +173,34 @@ export default class VectorEstadoLaboratorio {
       this.tiempoInicioInterrupcion1 = -1;
     } else {
       this.tiempoInicioInterrupcion2 = -1;
+    }
+  }
+
+  // MÉTODOS PARA MANEJAR INTERRUPCIÓN TEMPORAL
+  guardarInterrupcionTemporal(equipo, tecnicoId, tiempoInterrupcion) {
+    // Calcular cuánto tiempo ya trabajó en el equipo
+    const tiempoYaTrabajado = tiempoInterrupcion - equipo.llegada;
+    const tiempoRestante = equipo.duracion - tiempoYaTrabajado;
+    
+    const interrupcionTemp = {
+      equipo: equipo,
+      tecnicoId: tecnicoId,
+      tiempoInterrupcion: tiempoInterrupcion,
+      tiempoRestante: tiempoRestante > 0 ? tiempoRestante : 0.1 // Mínimo 0.1 minuto
+    };
+    
+    this.equiposInterrumpidosTemporalmente.push(interrupcionTemp);
+    return interrupcionTemp;
+  }
+
+  obtenerInterrupcionTemporal(tecnicoId) {
+    return this.equiposInterrumpidosTemporalmente.find(i => i.tecnicoId === tecnicoId);
+  }
+
+  limpiarInterrupcionTemporal(tecnicoId) {
+    const index = this.equiposInterrumpidosTemporalmente.findIndex(i => i.tecnicoId === tecnicoId);
+    if (index !== -1) {
+      this.equiposInterrumpidosTemporalmente.splice(index, 1);
     }
   }
 

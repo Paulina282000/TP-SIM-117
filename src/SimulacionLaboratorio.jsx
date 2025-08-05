@@ -265,6 +265,23 @@ const SimulacionLaboratorio = () => {
               // Si era un trabajo C, finalizar la interrupción
               if (equipoFinalizado.tipo === "C") {
                 vectorActual.finalizarInterrupcionC(1);
+                
+                // Verificar si hay un equipo interrumpido temporalmente para retomar
+                const interrupcionTemp = vectorActual.obtenerInterrupcionTemporal(1);
+                if (interrupcionTemp) {
+                  // Retomar el equipo que estaba interrumpido temporalmente
+                  vectorActual.tecnico1.estado = "ocupado";
+                  vectorActual.tecnico1.equipo = interrupcionTemp.equipo;
+                  interrupcionTemp.equipo.estado = "SR";
+                  interrupcionTemp.equipo.tecnico = 1;
+                  vectorActual[`estado_${interrupcionTemp.equipo.id}`] = "SR";
+                  
+                  // Usar el tiempo restante calculado
+                  vectorActual.finTrabajo1 = reloj + interrupcionTemp.tiempoRestante;
+                  
+                  // Limpiar la interrupción temporal
+                  vectorActual.limpiarInterrupcionTemporal(1);
+                }
               }
             }
           }
@@ -326,6 +343,23 @@ const SimulacionLaboratorio = () => {
               // Si era un trabajo C, finalizar la interrupción
               if (equipoFinalizado.tipo === "C") {
                 vectorActual.finalizarInterrupcionC(2);
+                
+                // Verificar si hay un equipo interrumpido temporalmente para retomar
+                const interrupcionTemp = vectorActual.obtenerInterrupcionTemporal(2);
+                if (interrupcionTemp) {
+                  // Retomar el equipo que estaba interrumpido temporalmente
+                  vectorActual.tecnico2.estado = "ocupado";
+                  vectorActual.tecnico2.equipo = interrupcionTemp.equipo;
+                  interrupcionTemp.equipo.estado = "SR";
+                  interrupcionTemp.equipo.tecnico = 2;
+                  vectorActual[`estado_${interrupcionTemp.equipo.id}`] = "SR";
+                  
+                  // Usar el tiempo restante calculado
+                  vectorActual.finTrabajo2 = reloj + interrupcionTemp.tiempoRestante;
+                  
+                  // Limpiar la interrupción temporal
+                  vectorActual.limpiarInterrupcionTemporal(2);
+                }
               }
             }
           }
@@ -371,6 +405,16 @@ const SimulacionLaboratorio = () => {
           // Buscar el equipo en interrupción y asignarlo al técnico
           const interrupcion = vectorActual.obtenerInterrupcionPorTecnico(1);
           if (interrupcion) {
+            // Si el técnico está ocupado con otro equipo, interrumpirlo
+            if (vectorActual.tecnico1.estado === "ocupado" && vectorActual.tecnico1.equipo) {
+              const equipoActual = vectorActual.tecnico1.equipo;
+              // Guardar el equipo actual como interrumpido temporalmente
+              vectorActual.guardarInterrupcionTemporal(equipoActual, 1, reloj);
+              equipoActual.estado = "INT_TEMP"; // Interrumpido temporalmente
+              vectorActual[`estado_${equipoActual.id}`] = "INT_TEMP";
+            }
+            
+            // Asignar el equipo C interrumpido al técnico
             vectorActual.tecnico1.estado = "ocupado";
             vectorActual.tecnico1.equipo = interrupcion.equipo;
             interrupcion.equipo.estado = "SR";
@@ -395,6 +439,16 @@ const SimulacionLaboratorio = () => {
           // Buscar el equipo en interrupción y asignarlo al técnico
           const interrupcion = vectorActual.obtenerInterrupcionPorTecnico(2);
           if (interrupcion) {
+            // Si el técnico está ocupado con otro equipo, interrumpirlo
+            if (vectorActual.tecnico2.estado === "ocupado" && vectorActual.tecnico2.equipo) {
+              const equipoActual = vectorActual.tecnico2.equipo;
+              // Guardar el equipo actual como interrumpido temporalmente
+              vectorActual.guardarInterrupcionTemporal(equipoActual, 2, reloj);
+              equipoActual.estado = "INT_TEMP"; // Interrumpido temporalmente
+              vectorActual[`estado_${equipoActual.id}`] = "INT_TEMP";
+            }
+            
+            // Asignar el equipo C interrumpido al técnico
             vectorActual.tecnico2.estado = "ocupado";
             vectorActual.tecnico2.equipo = interrupcion.equipo;
             interrupcion.equipo.estado = "SR";
@@ -521,6 +575,7 @@ const SimulacionLaboratorio = () => {
       console.log("c) Porcentaje de ocupación técnico 1:", porcentajeOcupacionTec1.toFixed(2) + "%");
       console.log("   Porcentaje de ocupación técnico 2:", porcentajeOcupacionTec2.toFixed(2) + "%");
       console.log("   Porcentaje de ocupación ambos técnicos:", porcentajeOcupacionAmbos.toFixed(2) + "%");
+      console.log("d) Tiempo total de simulación:", reloj.toFixed(2), "minutos");
       console.log("=====================================");
              } catch (error) {
          console.error("Error en la simulación:", error);
@@ -656,7 +711,7 @@ const SimulacionLaboratorio = () => {
                 {/* Primera fila de encabezados agrupados */}
                 <tr className="bg-gray-200">
                   <th rowSpan="2" className="border px-2 py-1 text-center bg-blue-100">Evento</th>
-                  <th rowSpan="2" className="border px-2 py-1 text-center bg-blue-100">Reloj</th>
+                  <th rowSpan="2" className="border px-2 py-1 text-center bg-blue-100">Reloj<br/>(min)</th>
                   
                   {/* LLEGADAS */}
                   <th colSpan="3" className="border px-2 py-1 text-center bg-blue-200">Llegada de equipos</th>
@@ -674,7 +729,7 @@ const SimulacionLaboratorio = () => {
                   <th colSpan="7" className="border px-2 py-1 text-center bg-green-200">Variables Estadísticas</th>
                   
                   {/* EQUIPOS - Encabezados individuales */}
-                  {Array.from({length: filas.length > 0 ? filas[0].equiposSimulados?.length || 10 : 10}, (_, i) => (
+                  {Array.from({length: filas.length > 0 ? filas[0].equiposSimulados?.length || 20 : 20}, (_, i) => (
                     <th key={i} colSpan="2" className="border px-2 py-1 text-center bg-purple-200">
                       EQUIPO {i + 1}
                     </th>
@@ -715,7 +770,7 @@ const SimulacionLaboratorio = () => {
                   <th className="border px-2 py-1 text-center bg-green-200">% Ocupación Ambos</th>
                   
                   {/* EQUIPOS - Sub-columnas */}
-                  {Array.from({length: filas.length > 0 ? filas[0].equiposSimulados?.length || 10 : 10}, (_, i) => (
+                  {Array.from({length: filas.length > 0 ? filas[0].equiposSimulados?.length || 20 : 20}, (_, i) => (
                     <React.Fragment key={i}>
                       <th className="border px-2 py-1 text-center bg-purple-200 min-w-[100px]">
                         estado
@@ -768,7 +823,7 @@ const SimulacionLaboratorio = () => {
                     <td className="border px-2 py-1 text-center">{fila.porcentajeOcupacionAmbos}</td>
                     
                     {/* EQUIPOS */}
-                    {Array.from({length: filas.length > 0 ? filas[0].equiposSimulados?.length || 10 : 10}, (_, i) => (
+                    {Array.from({length: filas.length > 0 ? filas[0].equiposSimulados?.length || 20 : 20}, (_, i) => (
                       <React.Fragment key={i}>
                         <td className="border px-2 py-1 text-center">
                           {fila[`estado_${i + 1}`] || ""}
