@@ -9,6 +9,12 @@ const SimulacionLaboratorio = () => {
   const [cantidadSimulaciones, setCantidadSimulaciones] = useState(300);
   const [cargando, setCargando] = useState(false);
 
+  const limpiar = () => {
+    setFilas([]);
+    setCargando(false);
+    console.log("Simulación limpiada");
+  };
+
   const simular = () => {
     setCargando(true);
     setTimeout(() => {
@@ -54,8 +60,7 @@ const SimulacionLaboratorio = () => {
       const rndsGenerados = new Set();
       rndsGenerados.add(rndInicial);
       
-      console.log("Parámetros:", { cantidadSimulaciones, desde, hasta, proximaLlegada });
-      console.log("RND inicial:", rndInicial.toFixed(4), "Tiempo inicial:", tiempoInicial.toFixed(2));
+
 
       // OPTIMIZACIÓN: Vectores reutilizables
       let vectorActual = new VectorEstadoLaboratorio();
@@ -94,9 +99,7 @@ const SimulacionLaboratorio = () => {
       while (equiposSimulados.length < cantidadSimulaciones && iteraciones < maxIteraciones) {
         iteraciones++;
         
-        if (iteraciones % 50 === 0) {
-          console.log(`Iteración ${iteraciones}, equipos simulados: ${equiposSimulados.length}, reloj: ${reloj.toFixed(2)}`);
-        }
+
         
         // OPTIMIZACIÓN: Intercambiar vectores en lugar de crear nuevos
         [vectorAnterior, vectorActual] = [vectorActual, vectorAnterior];
@@ -112,15 +115,18 @@ const SimulacionLaboratorio = () => {
         ].filter(e => e >= 0);
 
         if (eventos.length === 0) {
-          console.log("No hay eventos activos, terminando simulación");
-          break;
+          // Si no hay eventos activos, generar una nueva llegada
+          const tiempoEntreLlegadas = generarTiempoEntreLlegadas();
+          proximaLlegada = reloj + tiempoEntreLlegadas;
+          vectorActual.proximaLlegada = proximaLlegada;
+          continue; // Continuar con la siguiente iteración
         }
 
         const proximo = Math.min(...eventos);
         reloj = proximo;
         vectorActual.reloj = reloj;
 
-        console.log(`Evento: ${proximo}, Reloj: ${reloj.toFixed(2)}, Equipos: ${equiposSimulados.length}`);
+
 
         // Procesar evento
         if (proximo === vectorAnterior.proximaLlegada) {
@@ -166,12 +172,11 @@ const SimulacionLaboratorio = () => {
           vectorActual.tiempoTrabajo = tiempoTrabajo;
 
           equiposSimulados.push(equipo);
-          console.log(`Equipo ${equipo.id} creado: ${equipo.tipo}, duración: ${equipo.duracion}`);
-          console.log(`RNDs: llegada=${rndLlegada.toFixed(4)}, tipo=${rndTipoTrabajo.toFixed(4)}`);
 
           // Asignar a técnico o cola
-          const tecnico1Libre = vectorActual.tecnico1.estado === "libre";
-          const tecnico2Libre = vectorActual.tecnico2.estado === "libre";
+          // Usar el estado de los técnicos del vector anterior (estado real)
+          const tecnico1Libre = vectorAnterior.tecnico1.estado === "libre";
+          const tecnico2Libre = vectorAnterior.tecnico2.estado === "libre";
 
           if (tecnico1Libre) {
             vectorActual.tecnico1.estado = "ocupado";
@@ -244,12 +249,14 @@ const SimulacionLaboratorio = () => {
           // Fin trabajo técnico 1
           const equipoFinalizado = vectorAnterior.tecnico1.equipo;
           
+          // Limpiar finTrabajo1 para evitar bucle infinito
+          vectorActual.finTrabajo1 = -1;
+          
           if (equipoFinalizado) {
             if (equipoFinalizado.tipo === "C" && vectorAnterior.retornoTrabajo1 > 0) {
               // Interrupción: técnico sale, equipo queda en proceso
               vectorActual.tecnico1.estado = "libre";
               vectorActual.tecnico1.equipo = null;
-              vectorActual.finTrabajo1 = -1;
               // El equipo sigue en interrupción hasta el retorno
               equipoFinalizado.estado = "INT"; // Interrumpido
               vectorActual[`estado_${equipoFinalizado.id}`] = "INT";
@@ -257,7 +264,6 @@ const SimulacionLaboratorio = () => {
               // Trabajo normal terminado
               vectorActual.tecnico1.estado = "libre";
               vectorActual.tecnico1.equipo = null;
-              vectorActual.finTrabajo1 = -1;
               equipoFinalizado.estado = "T";
               vectorActual[`estado_${equipoFinalizado.id}`] = "T";
               vectorActual.equiposAtendidos++;
@@ -286,28 +292,48 @@ const SimulacionLaboratorio = () => {
             }
           }
 
-          // Asignar siguiente equipo de la cola
-          if (vectorActual.tecnico1.estado === "libre" && vectorActual.colaEspera.length > 0) {
-            const siguienteEquipo = vectorActual.colaEspera.shift();
-            if (siguienteEquipo) {
+          // LÓGICA CORRECTA: PRIMERO verificar equipo interrumpido, LUEGO cola
+          if (vectorActual.tecnico1.estado === "libre") {
+            // 1. PRIMERO: Verificar si hay equipo interrumpido temporalmente para retomar
+            const interrupcionTemp = vectorActual.obtenerInterrupcionTemporal(1);
+            if (interrupcionTemp) {
+              // Retomar el equipo que estaba interrumpido temporalmente
               vectorActual.tecnico1.estado = "ocupado";
-              vectorActual.tecnico1.equipo = siguienteEquipo;
-              siguienteEquipo.estado = "SR";
-              siguienteEquipo.tecnico = 1;
-              vectorActual[`estado_${siguienteEquipo.id}`] = "SR";
+              vectorActual.tecnico1.equipo = interrupcionTemp.equipo;
+              interrupcionTemp.equipo.estado = "SR";
+              interrupcionTemp.equipo.tecnico = 1;
+              vectorActual[`estado_${interrupcionTemp.equipo.id}`] = "SR";
+              
+              // Usar el tiempo restante calculado
+              vectorActual.finTrabajo1 = reloj + interrupcionTemp.tiempoRestante;
+              
+              // Limpiar la interrupción temporal
+              vectorActual.limpiarInterrupcionTemporal(1);
+            }
+            // 2. SEGUNDO: Si no hay equipo interrumpido, verificar cola
+            else if (vectorActual.colaEspera.length > 0) {
+              const siguienteEquipo = vectorActual.colaEspera.shift();
+              if (siguienteEquipo) {
+                vectorActual.tecnico1.estado = "ocupado";
+                vectorActual.tecnico1.equipo = siguienteEquipo;
+                siguienteEquipo.estado = "SR";
+                siguienteEquipo.tecnico = 1;
+                vectorActual[`estado_${siguienteEquipo.id}`] = "SR";
 
-              // Generar RND para fin de trabajo
-              const rndFinTrabajo = Math.random();
-              vectorActual.rndFinTrabajo = rndFinTrabajo;
-              vectorActual.tiempoTrabajo = siguienteEquipo.duracion;
+                // Generar RND para fin de trabajo
+                const rndFinTrabajo = Math.random();
+                vectorActual.rndFinTrabajo = rndFinTrabajo;
+                vectorActual.tiempoTrabajo = siguienteEquipo.duracion;
 
-              if (siguienteEquipo.tipo === "C") {
-                vectorActual.finTrabajo1 = reloj + 25;
-                vectorActual.retornoTrabajo1 = reloj + siguienteEquipo.duracion - 10;
-              } else {
-                vectorActual.finTrabajo1 = reloj + siguienteEquipo.duracion;
+                if (siguienteEquipo.tipo === "C") {
+                  vectorActual.finTrabajo1 = reloj + 25;
+                  vectorActual.retornoTrabajo1 = reloj + siguienteEquipo.duracion - 10;
+                } else {
+                  vectorActual.finTrabajo1 = reloj + siguienteEquipo.duracion;
+                }
               }
             }
+            // 3. TERCERO: Si no hay cola, técnico queda libre (ya está libre)
           }
 
         } else if (proximo === vectorAnterior.finTrabajo2) {
@@ -324,18 +350,19 @@ const SimulacionLaboratorio = () => {
           // Fin trabajo técnico 2
           const equipoFinalizado = vectorAnterior.tecnico2.equipo;
           
+          // Limpiar finTrabajo2 para evitar bucle infinito
+          vectorActual.finTrabajo2 = -1;
+          
           if (equipoFinalizado) {
             if (equipoFinalizado.tipo === "C" && vectorAnterior.retornoTrabajo2 > 0) {
               vectorActual.tecnico2.estado = "libre";
               vectorActual.tecnico2.equipo = null;
-              vectorActual.finTrabajo2 = -1;
               // El equipo sigue en interrupción hasta el retorno
               equipoFinalizado.estado = "INT"; // Interrumpido
               vectorActual[`estado_${equipoFinalizado.id}`] = "INT";
             } else {
               vectorActual.tecnico2.estado = "libre";
               vectorActual.tecnico2.equipo = null;
-              vectorActual.finTrabajo2 = -1;
               equipoFinalizado.estado = "T";
               vectorActual[`estado_${equipoFinalizado.id}`] = "T";
               vectorActual.equiposAtendidos++;
@@ -364,27 +391,48 @@ const SimulacionLaboratorio = () => {
             }
           }
 
-          if (vectorActual.tecnico2.estado === "libre" && vectorActual.colaEspera.length > 0) {
-            const siguienteEquipo = vectorActual.colaEspera.shift();
-            if (siguienteEquipo) {
+          // LÓGICA CORRECTA: PRIMERO verificar equipo interrumpido, LUEGO cola
+          if (vectorActual.tecnico2.estado === "libre") {
+            // 1. PRIMERO: Verificar si hay equipo interrumpido temporalmente para retomar
+            const interrupcionTemp = vectorActual.obtenerInterrupcionTemporal(2);
+            if (interrupcionTemp) {
+              // Retomar el equipo que estaba interrumpido temporalmente
               vectorActual.tecnico2.estado = "ocupado";
-              vectorActual.tecnico2.equipo = siguienteEquipo;
-              siguienteEquipo.estado = "SR";
-              siguienteEquipo.tecnico = 2;
-              vectorActual[`estado_${siguienteEquipo.id}`] = "SR";
+              vectorActual.tecnico2.equipo = interrupcionTemp.equipo;
+              interrupcionTemp.equipo.estado = "SR";
+              interrupcionTemp.equipo.tecnico = 2;
+              vectorActual[`estado_${interrupcionTemp.equipo.id}`] = "SR";
+              
+              // Usar el tiempo restante calculado
+              vectorActual.finTrabajo2 = reloj + interrupcionTemp.tiempoRestante;
+              
+              // Limpiar la interrupción temporal
+              vectorActual.limpiarInterrupcionTemporal(2);
+            }
+            // 2. SEGUNDO: Si no hay equipo interrumpido, verificar cola
+            else if (vectorActual.colaEspera.length > 0) {
+              const siguienteEquipo = vectorActual.colaEspera.shift();
+              if (siguienteEquipo) {
+                vectorActual.tecnico2.estado = "ocupado";
+                vectorActual.tecnico2.equipo = siguienteEquipo;
+                siguienteEquipo.estado = "SR";
+                siguienteEquipo.tecnico = 2;
+                vectorActual[`estado_${siguienteEquipo.id}`] = "SR";
 
-              // Generar RND para fin de trabajo
-              const rndFinTrabajo = Math.random();
-              vectorActual.rndFinTrabajo = rndFinTrabajo;
-              vectorActual.tiempoTrabajo = siguienteEquipo.duracion;
+                // Generar RND para fin de trabajo
+                const rndFinTrabajo = Math.random();
+                vectorActual.rndFinTrabajo = rndFinTrabajo;
+                vectorActual.tiempoTrabajo = siguienteEquipo.duracion;
 
-              if (siguienteEquipo.tipo === "C") {
-                vectorActual.finTrabajo2 = reloj + 25;
-                vectorActual.retornoTrabajo2 = reloj + siguienteEquipo.duracion - 10;
-              } else {
-                vectorActual.finTrabajo2 = reloj + siguienteEquipo.duracion;
+                if (siguienteEquipo.tipo === "C") {
+                  vectorActual.finTrabajo2 = reloj + 25;
+                  vectorActual.retornoTrabajo2 = reloj + siguienteEquipo.duracion - 10;
+                } else {
+                  vectorActual.finTrabajo2 = reloj + siguienteEquipo.duracion;
+                }
               }
             }
+            // 3. TERCERO: Si no hay cola, técnico queda libre (ya está libre)
           }
 
         } else if (proximo === vectorAnterior.retornoTrabajo1) {
@@ -455,6 +503,8 @@ const SimulacionLaboratorio = () => {
             interrupcion.equipo.tecnico = 2;
           }
         }
+
+
 
         // Guardar referencia a equipos simulados en el vector de estado
         vectorActual.equiposSimulados = equiposSimulados;
@@ -536,47 +586,20 @@ const SimulacionLaboratorio = () => {
           filasSimulacion.push(vectorActual.toRow());
         }
         
-        // OPTIMIZACIÓN: Terminar la simulación si ya tenemos suficientes equipos Y pasamos el rango
+        // OPTIMIZACIÓN: Si ya pasamos el rango y tenemos suficientes equipos, terminar
         if (iteraciones > hasta && equiposSimulados.length >= cantidadSimulaciones) {
-          console.log(`Simulación terminada temprano: ${equiposSimulados.length} equipos, iteración ${iteraciones}`);
           break;
         }
         
-        // OPTIMIZACIÓN: Si ya pasamos el rango y tenemos suficientes equipos, saltar procesamiento pesado
-        if (iteraciones > hasta && equiposSimulados.length >= cantidadSimulaciones) {
-          continue; // Saltar al siguiente ciclo sin procesar eventos
-        }
-      }
-      
-      console.log(`Simulación completada. Iteraciones: ${iteraciones}, Equipos: ${equiposSimulados.length}`);
-      
-      if (iteraciones >= maxIteraciones) {
-        console.warn("¡ADVERTENCIA! Se alcanzó el límite máximo de iteraciones");
-      }
 
-      // Ya no necesitamos hacer slice porque solo guardamos las filas del rango
-      console.log("Filas a mostrar:", filasSimulacion.length);
+      }
+      
+
       setFilas(filasSimulacion);
 
-      // Calcular métricas finales
-      const equiposAtendidos = equiposSimulados.filter(eq => eq.estado === "T").length;
-      const tiempoTotalPermanencia = equiposSimulados
-        .filter(eq => eq.estado === "T")
-        .reduce((total, eq) => total + (reloj - eq.llegada), 0);
-      const promedioPermanencia = equiposAtendidos > 0 ? tiempoTotalPermanencia / equiposAtendidos : 0;
-      const porcentajeRechazados = (vectorActual.equiposRechazados / equiposSimulados.length) * 100;
-      const porcentajeOcupacionTec1 = reloj > 0 ? (vectorActual.usoTecnico1 / reloj) * 100 : 0;
-      const porcentajeOcupacionTec2 = reloj > 0 ? (vectorActual.usoTecnico2 / reloj) * 100 : 0;
-      const porcentajeOcupacionAmbos = (porcentajeOcupacionTec1 + porcentajeOcupacionTec2) / 2;
 
-      console.log("=== RESULTADOS DE LA SIMULACIÓN ===");
-      console.log("a) Promedio de permanencia en el laboratorio:", promedioPermanencia.toFixed(2), "minutos");
-      console.log("b) Porcentaje de equipos rechazados:", porcentajeRechazados.toFixed(2) + "%");
-      console.log("c) Porcentaje de ocupación técnico 1:", porcentajeOcupacionTec1.toFixed(2) + "%");
-      console.log("   Porcentaje de ocupación técnico 2:", porcentajeOcupacionTec2.toFixed(2) + "%");
-      console.log("   Porcentaje de ocupación ambos técnicos:", porcentajeOcupacionAmbos.toFixed(2) + "%");
-      console.log("d) Tiempo total de simulación:", reloj.toFixed(2), "minutos");
-      console.log("=====================================");
+
+
              } catch (error) {
          console.error("Error en la simulación:", error);
          alert("Error en la simulación: " + error.message);
@@ -697,8 +720,13 @@ const SimulacionLaboratorio = () => {
                 className="w-full border px-2 py-1" 
               />
             </div>
-            <div className="flex items-end">
-              <button onClick={simular} className="w-full bg-blue-600 text-white py-2 px-4">Simular</button>
+            <div className="flex items-end gap-2">
+              <button onClick={simular} className="flex-1 bg-blue-600 text-white py-2 px-4 hover:bg-blue-700 transition-colors">
+                Simular
+              </button>
+              <button onClick={limpiar} className="flex-1 bg-red-600 text-white py-2 px-4 hover:bg-red-700 transition-colors">
+                Limpiar
+              </button>
             </div>
           </div>
       </div>

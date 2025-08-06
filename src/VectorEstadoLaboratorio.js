@@ -72,17 +72,13 @@ export default class VectorEstadoLaboratorio {
      this.tiempoInicioInterrupcion1 = v.tiempoInicioInterrupcion1;
      this.tiempoInicioInterrupcion2 = v.tiempoInicioInterrupcion2;
      this.equiposInterrumpidosTemporalmente = [...v.equiposInterrumpidosTemporalmente];
-     this.equiposSimulados = v.equiposSimulados;
-     
-     // Copiar propiedades dinámicas de equipos
-     if (v.equiposSimulados) {
-       v.equiposSimulados.forEach((equipo, index) => {
-         const estadoKey = `estado_${index + 1}`;
-         const llegadaKey = `llegada_${index + 1}`;
-         this[estadoKey] = v[estadoKey];
-         this[llegadaKey] = v[llegadaKey];
-       });
-     }
+     // ⚠️ NO copiar el array completo para evitar ocupar memoria innecesaria
+     // ✅ Solo copiar las claves dinámicas que representan equipos activos
+     Object.keys(v).forEach(key => {
+       if (key.startsWith("estado_") || key.startsWith("llegada_")) {
+         this[key] = v[key];
+       }
+     });
    }
 
      toRow() {
